@@ -21,19 +21,18 @@ defmodule Skynet.Terminator do
     Process.send_after(pid, :possibly_spawn_terminator, @time_to_spawn_new)
   end
 
-  def init(args) do
-    Map.put(args, :terminator_list, [])
+  def init(init_args) do
+    max_retries = Keyword.get(init_args, :max_retries, 5)
     check_for_spawn()
     check_for_death()
-    {:ok, args}
+    state = %{terminator_list: [], max_retries: max_retries}
+    {:ok, state}
   end
 
-  def spawn_terminator(terminator_list) do
+  def spawn_terminator() do
     id = generate_random_id()
-    {:ok, pid} = GenServer.start(Skynet.Terminator, %{})
-    t = %Skynet.Terminator{id: id, task_pid: pid}
-    terminator_list = [t] ++ [terminator_list]
-    List.flatten(terminator_list)
+    {:ok, pid} = GenServer.start(Skynet.Terminator, max_retries: 5)
+    %Skynet.Terminator{id: id, task_pid: pid}
   end
 
   def check_for_spawn() do
@@ -54,38 +53,40 @@ defmodule Skynet.Terminator do
     Process.exit(terminator_to_be_killed, :normal)
   end
 
-  def handle_info(:check_for_death, args) do
+  def handle_info(:check_for_death, state) do
     Logger.info("Checking for termination")
 
     if random_chance_passed?(@chance_of_death) do
       Logger.info("Sarah Connor got this terminator")
-      kill_terminator(args.terminator_list)
+      kill_terminator(state.terminator_list)
     else
       check_for_death()
       # No need to do anything
-      {:noreply, args}
+      {:noreply, state}
     end
   end
 
-  def handle_info(:possibly_spawn_terminator, args) do
+  def handle_info(:possibly_spawn_terminator, state) do
     Logger.info("Checking for spawning new terminator")
 
     if random_chance_passed?(@chance_spawn_new) do
-      Logger.info("args before spawning new terminator: #{inspect(args)}")
+      Logger.info("state before spawning new terminator: #{inspect(state)}")
       Logger.info("Spawning new terminator")
-      terminator_list = spawn_terminator(args.terminator_list)
-      Logger.info("terminator_list post task #{inspect(terminator_list)}")
-      Logger.info("args after spawning new terminator #{inspect(args)}")
-      %{args | terminator_list: terminator_list}
-      Logger.info("args after replacing key #{inspect(args)}")
-      # Logger.info("New process #{inspect(pid)} started")
-      #      post_spawn_check(self())
+      terminator = spawn_terminator()
+      terminator_list = state.terminator_list
+      terminator_list = [terminator] ++ terminator_list
+      List.flatten(terminator_list)
+
+      state = Map.replace(state, :terminator_list, terminator_list)
+
+      Logger.info("terminator_list post task #{inspect(state.terminator_list)}")
+      Logger.info("state after spawning new terminator #{inspect(state)}")
       check_for_spawn()
-      {:noreply, args}
+      {:noreply, state}
     else
       # No need to do anything
       check_for_spawn()
-      {:noreply, args}
+      {:noreply, state}
     end
   end
 end
