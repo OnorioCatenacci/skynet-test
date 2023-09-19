@@ -2,7 +2,7 @@
 
 Notes:
 
-1.) To start the app:https://stackoverflow.com/users/2820/onorio-catenacci?tab=profile
+1.) To start the app:
 
 {:ok, original_pid} = GenServer.start(Skynet.Terminator, [max_retries: 5])
 
